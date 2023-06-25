@@ -39,12 +39,17 @@ def load_cache(path: str) -> bpy.types.CacheFile:
 	cache.name = str(uuid4())
 	return cache
 
-def add_driver(cache: bpy.types.CacheFile, speed: float, offset: float) -> None:
+def set_driver(cache: bpy.types.CacheFile, speed: float, offset: float, start_frame: int = 0, loop_frames: int = 30) -> None:
+	# Never add the same driver twice
+	driver = None
+	anim_data = cache.animation_data
+	if anim_data and anim_data.drivers:
+		driver = anim_data.drivers[-1].driver
+	else:
+		driver = cache.driver_add("frame").driver
+
 	# Loop animation using driver
 	cache.override_frame = True
-	driver = cache.driver_add("frame").driver
-	start_frame = 0
-	loop_frames = 30
 	speed_str = "" if speed == 1 else " * speed"
 	offset_str = "" if offset == 0 else " + offset"
 	frame_str = f"frame{speed_str}{offset_str}"
@@ -77,7 +82,7 @@ def set_anim_lib(self, context):
 	
 	# Load animation cache
 	cache = load_cache(self.cache_lib)
-	add_driver(cache, 1.0, 0.0)
+	set_driver(cache, 1, 0, 0, 30)
 
 	# Apply to modifier
 	modifier.cache_file = cache
@@ -98,6 +103,9 @@ def set_anim(self, context):
 	# Update animation cache
 	selected_cache = self.caches[self.selected_index]
 	modifier.object_path = selected_cache.name
+
+	# Update driver settings
+	set_driver(modifier.cache_file, selected_cache.speed, selected_cache.offset, 0, 30)
 
 class Animation_Property(bpy.types.PropertyGroup):
 	# Name is built into PropertyGroup
@@ -163,7 +171,7 @@ class Add_Cache_Modifier(bpy.types.Operator):
 		# Load animation as cache file
 		chosen_lib = libs[0]
 		cache = load_cache(chosen_lib[0])
-		add_driver(cache, 1, 0)
+		set_driver(cache, 1, 0, 0, 30)
 
 		# Assign cache to modifier
 		cache_modifier.cache_file = cache
