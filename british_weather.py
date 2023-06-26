@@ -15,8 +15,8 @@ bl_info = {
 supported_rigs = {
 	"gary": {
 		"tie": [
-			("C:\\Users\\MysteryPancake\\Desktop\\CLOTHSHIT\\gary_ties_v1.abc", "Ties of the Office: Pack 1 of 3000", "", "ASSET_MANAGER", 0),
-			("C:\\Users\\MysteryPancake\\Desktop\\CLOTHSHIT\\gary_ties_v2.abc", "The John Pork Signature Collection", "", "MONKEY", 1)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_ties_v1.abc", "Ties of the Office: Pack 1 of 3000", "", "ASSET_MANAGER", 0),
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_ties_v2.abc", "The John Pork Signature Collection", "", "MONKEY", 1)
 		],
 		"shirt": [],
 		"pants": []
