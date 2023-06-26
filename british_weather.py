@@ -85,7 +85,8 @@ class Animation_Property(bpy.types.PropertyGroup):
 class Animation_List_Data(bpy.types.PropertyGroup):
 
 	def get_anim_libs(self, context):
-		print("TODO: get_anim_libs")
+		# TODO
+		# print("TODO")
 		return supported_rigs["gary"]["tie"]
 
 	def set_anim_lib(self, context):
