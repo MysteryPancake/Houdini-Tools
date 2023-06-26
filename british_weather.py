@@ -15,8 +15,8 @@ bl_info = {
 supported_rigs = {
 	"gary": {
 		"tie": [
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_ties_v1.abc", "Ties of the Office: Pack 1 of 3000", "", "ASSET_MANAGER", 0),
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_ties_v2.abc", "The John Pork Signature Collection", "", "MONKEY", 1)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties.abc", "Ties of the Office: Part 1 of 3000", "", "ASSET_MANAGER", 0),
+			#("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_ties_v2.abc", "The John Pork Signature Collection", "", "MONKEY", 1)
 		],
 		"shirt": [],
 		"pants": []
@@ -39,7 +39,7 @@ def load_cache(path: str) -> bpy.types.CacheFile:
 	cache.name = str(uuid4())
 	return cache
 
-def set_driver(cache: bpy.types.CacheFile, speed: float, offset: float, start_frame: int = 0, loop_frames: int = 30) -> None:
+def set_driver(cache: bpy.types.CacheFile, speed: float, offset: float, start_frame: int = 0, loop_frames: int = 64) -> None:
 	# Never add the same driver twice
 	driver = None
 	anim_data = cache.animation_data
@@ -63,9 +63,15 @@ def set_driver(cache: bpy.types.CacheFile, speed: float, offset: float, start_fr
 def update_anims(object: bpy.types.Object, cache: bpy.types.CacheFile) -> None:
 	anim_data = object.bw_anim_data
 	if not anim_data.caches:
+		selected = 0
 		for path in cache.object_paths:
 			item = anim_data.caches.add()
 			item.name = path.path
+			if path.path == "/rest":
+				selected = len(anim_data.caches) - 1
+		# Ensure rest animation is selected by default
+		anim_data.selected_index = selected
+
 	# Force UI update
 	object.select_set(True)
 
@@ -76,7 +82,7 @@ class Animation_Property(bpy.types.PropertyGroup):
 		modifier = getattr(context, "bw_modifier", None)
 		if not item or not modifier:
 			return
-		set_driver(modifier.cache_file, item.speed, item.offset, 0, 30)
+		set_driver(modifier.cache_file, item.speed, item.offset, 0, 64)
 
 	# Name is built into PropertyGroup
 	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
@@ -97,7 +103,7 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 		
 		# Load animation cache
 		cache = load_cache(self.cache_lib)
-		set_driver(cache, 1, 0, 0, 30)
+		set_driver(cache, 1, 0, 0, 64)
 
 		# Apply to modifier
 		modifier.cache_file = cache
@@ -120,7 +126,7 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 		modifier.object_path = selected_cache.name
 
 		# Update driver settings
-		set_driver(modifier.cache_file, selected_cache.speed, selected_cache.offset, 0, 30)
+		set_driver(modifier.cache_file, selected_cache.speed, selected_cache.offset, 0, 64)
 
 	cache_lib: bpy.props.EnumProperty(name="Animation Library", items=get_anim_libs, update=set_anim_lib)
 	caches: bpy.props.CollectionProperty(type=Animation_Property)
@@ -159,8 +165,8 @@ class Add_Cache_Modifier(bpy.types.Operator):
 			return {"CANCELLED"}
 		
 		# Never add the same modifier twice
-		cache_modifier = None
-		weight_modifier = None
+		cache_modifier: bpy.types.MeshSequenceCacheModifier = None
+		weight_modifier: bpy.types.VertexWeightEditModifier = None
 
 		for m in target.modifiers:
 			match m.name:
@@ -180,7 +186,7 @@ class Add_Cache_Modifier(bpy.types.Operator):
 		# Load animation as cache file
 		chosen_lib = libs[0]
 		cache = load_cache(chosen_lib[0])
-		set_driver(cache, 1, 0, 0, 30)
+		set_driver(cache, 1, 0, 0, 64)
 
 		# Assign cache to modifier
 		cache_modifier.cache_file = cache
