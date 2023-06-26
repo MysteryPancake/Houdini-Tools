@@ -50,8 +50,8 @@ def set_driver(cache: bpy.types.CacheFile, speed: float, offset: float, start_fr
 
 	# Loop animation using driver
 	cache.override_frame = True
-	speed_str = "" if speed == 1 else " * speed"
-	offset_str = "" if offset == 0 else " + offset"
+	speed_str = "" if speed == 1 else f" * {speed}"
+	offset_str = "" if offset == 0 else f" + {offset}"
 	frame_str = f"frame{speed_str}{offset_str}"
 	if start_frame == 0:
 		# Simple looping animation
@@ -69,50 +69,58 @@ def update_anims(object: bpy.types.Object, cache: bpy.types.CacheFile) -> None:
 	# Force UI update
 	object.select_set(True)
 
-def get_anim_libs(self, context):
-	# TODO
-	print("TODO")
-	return supported_rigs["gary"]["tie"]
-
-def set_anim_lib(self, context):
-	target = getattr(context, "bw_target", None)
-	modifier = getattr(context, "bw_modifier", None)
-	if not target or not modifier:
-		return
-	
-	# Load animation cache
-	cache = load_cache(self.cache_lib)
-	set_driver(cache, 1, 0, 0, 30)
-
-	# Apply to modifier
-	modifier.cache_file = cache
-	modifier.object_path = "/rest"
-
-	# Reset animation list
-	self.caches.clear()
-
-	# Update menu contents after brief delay
-	bpy.app.timers.register(functools.partial(update_anims, target, cache), first_interval=0.01)
-
-def set_anim(self, context):
-	target = getattr(context, "bw_target", None)
-	modifier = getattr(context, "bw_modifier", None)
-	if not target or not modifier:
-		return
-	
-	# Update animation cache
-	selected_cache = self.caches[self.selected_index]
-	modifier.object_path = selected_cache.name
-
-	# Update driver settings
-	set_driver(modifier.cache_file, selected_cache.speed, selected_cache.offset, 0, 30)
-
 class Animation_Property(bpy.types.PropertyGroup):
+
+	def update_driver(self, context):
+		item = getattr(context, "bw_item", None)
+		modifier = getattr(context, "bw_modifier", None)
+		if not item or not modifier:
+			return
+		set_driver(modifier.cache_file, item.speed, item.offset, 0, 30)
+
 	# Name is built into PropertyGroup
-	speed: bpy.props.FloatProperty(name="Speed", default=1)
-	offset: bpy.props.FloatProperty(name="Offset", default=0)
+	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
+	offset: bpy.props.FloatProperty(name="Offset", default=0, update=update_driver)
 
 class Animation_List_Data(bpy.types.PropertyGroup):
+
+	def get_anim_libs(self, context):
+		print("TODO: get_anim_libs")
+		return supported_rigs["gary"]["tie"]
+
+	def set_anim_lib(self, context):
+		target = getattr(context, "bw_target", None)
+		modifier = getattr(context, "bw_modifier", None)
+		if not target or not modifier:
+			return
+		
+		# Load animation cache
+		cache = load_cache(self.cache_lib)
+		set_driver(cache, 1, 0, 0, 30)
+
+		# Apply to modifier
+		modifier.cache_file = cache
+		modifier.object_path = "/rest"
+
+		# Reset animation list
+		self.caches.clear()
+
+		# Update menu contents after brief delay
+		bpy.app.timers.register(functools.partial(update_anims, target, cache), first_interval=0.01)
+	
+	def set_anim(self, context):
+		target = getattr(context, "bw_target", None)
+		modifier = getattr(context, "bw_modifier", None)
+		if not target or not modifier:
+			return
+		
+		# Update animation cache
+		selected_cache = self.caches[self.selected_index]
+		modifier.object_path = selected_cache.name
+
+		# Update driver settings
+		set_driver(modifier.cache_file, selected_cache.speed, selected_cache.offset, 0, 30)
+
 	cache_lib: bpy.props.EnumProperty(name="Animation Library", items=get_anim_libs, update=set_anim_lib)
 	caches: bpy.props.CollectionProperty(type=Animation_Property)
 	selected_index: bpy.props.IntProperty(default=0, update=set_anim)
@@ -190,9 +198,13 @@ class Add_Cache_Modifier(bpy.types.Operator):
 
 class Animation_List(bpy.types.UIList):
 	bl_idname = "ALA_UL_Animation_List"
+
 	def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
 		row = layout.row()
+		row.context_pointer_set(name="bw_item", data=item)
 		row.label(text=item.name)
+		row.prop(item, "speed")
+		row.prop(item, "offset")
 
 class Attachment_Panel(bpy.types.Panel):
 	bl_label = "British Weather"
