@@ -2,7 +2,7 @@ import bpy, functools
 from uuid import uuid4
 
 bl_info = {
-	"name": "No Cloth Sims",
+	"name": "ALA No Cloth Sims",
 	"description": "Avoid cloth sims for the small price of everything clipping",
 	"author": "MysteryPancake",
 	"version": (1, 0),
