@@ -23,7 +23,9 @@ bl_info = {
 # Vertex groups are used to bind rigs to geometry in Blender.
 # This fucks up since vertex groups can't be saved in Alembic or USD files, so Sequence Caches ruin the rig.
 # TO fix this, you need to add the vertex groups again after the "Mesh Sequence Cache" modifier.
-# This can be done with "Vertex Weight Edit", "Vertex Weight Proximity", "Data Transfer" or Geometry Nodes.
+# This can be done with "Vertex Weight Edit", "Data Transfer" or Geometry Nodes.
+
+# UPDATE: Vertex groups actually export to Alembic files now??? HOW???
 # =============================================================================================================
 
 # The array below contains all supported armatures and objects.
@@ -41,7 +43,7 @@ supported = [
 	{
 		"armature": "gary",
 		"libs": [
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties.abc", "Gary Drip: Volume 1", "", "ASSET_MANAGER", 0)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_cloth.abc", "Gary's Drip: Volume 1", "", "ASSET_MANAGER", 0)
 		],
 		"parts": ["tie", "shirt", "pants"]
 	},
@@ -281,22 +283,24 @@ class Add_Cache_Modifier(bpy.types.Operator):
 			cache_modifier = target.modifiers.new(name=self.cache_name, type="MESH_SEQUENCE_CACHE")
 			bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.cache_name, index=0)
 		
-		if not weight_modifier:
-			weight_modifier = target.modifiers.new(name=self.weight_name, type="VERTEX_WEIGHT_EDIT")
-			bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.weight_name, index=1)
-		
 		# See load_cache for why I'm not using multiusers for this
 		chosen_lib = libs[0]
 		cache = load_cache(chosen_lib[0])
 
 		# Assign cache to modifier
 		cache_modifier.cache_file = cache
+		
+		# TEMPORARY HACK HERE
+		if self.object_name == "tie":
+			if not weight_modifier:
+				weight_modifier = target.modifiers.new(name=self.weight_name, type="VERTEX_WEIGHT_EDIT")
+				bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.weight_name, index=1)
 
-		# Add vertex weights for rigging, assume tie for now
-		weight_modifier.vertex_group = "DEF-spine.003"
-		weight_modifier.default_weight = 1
-		weight_modifier.use_add = True
-		weight_modifier.add_threshold = 0
+			# Add vertex weights for rigging, assume tie for now
+			weight_modifier.vertex_group = "DEF-spine.003"
+			weight_modifier.default_weight = 1
+			weight_modifier.use_add = True
+			weight_modifier.add_threshold = 0
 		
 		# Update menu contents, Blender takes a bit to load the file
 		bpy.app.timers.register(functools.partial(update_anims, target, cache, cache_modifier), first_interval=0.01)
