@@ -33,7 +33,7 @@ supported = [
 		"mesh": "tie",
 		"armature": "gary", # Optional, unused for now
 		"libs": [
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_cloth.abc", "Gary's Ties: Volume 1", "", "ASSET_MANAGER", 0)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties.abc", "Gary's Ties: Volume 1", "", "ASSET_MANAGER", 0)
 		],
 	}
 ]
@@ -292,6 +292,7 @@ class Brute_Force_Panel(bpy.types.Panel):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator(Add_Overrides.bl_idname)
+		layout.operator(Reset_Position.bl_idname)
 		layout.operator(Reset_Rotation.bl_idname)
 
 class Animation_Panel(bpy.types.Panel):
