@@ -28,68 +28,54 @@ bl_info = {
 # UPDATE: Vertex groups actually export to Alembic files now??? HOW???
 # =============================================================================================================
 
-# The array below contains all supported armatures and objects.
-
-# For armatures, it works like this:
-# 1. Search for a rig containing "gary", for example "gary_001"
-# 2. Search the rig's children for matching objects, for example "tie_final"
-# 3. Add a button to animate each child object
-# 4. Profit
-
-# Part names must exactly match the exported Alembic path names
-# For example "tie" matches animations under "/tie/*"
-
 supported = [
 	{
-		"armature": "gary",
+		"mesh": "tie",
+		"armature": "gary", # Optional, unused for now
 		"libs": [
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_cloth.abc", "Gary's Drip: Volume 1", "", "ASSET_MANAGER", 0)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_cloth.abc", "Gary's Ties: Volume 1", "", "ASSET_MANAGER", 0)
 		],
-		"parts": ["tie", "shirt", "pants"]
-	},
-	{
-		"armature": "carol",
-		"libs": [],
-		"parts": ["blouse", "skirt", "scarf_", "scarf2_", "hair_main", "hair_front_right", "hair_front_left"]
 	}
 ]
 
-class Animation_Property(bpy.types.PropertyGroup):
-	"""Animation properties for each Mesh Sequence Cache"""
-
-	def update_driver(self, context):
-		item = getattr(context, "nc_item", None)
-		modifier = getattr(context, "nc_modifier", None)
-		if not item or not modifier:
-			return
-		set_driver(modifier.cache_file, item)
-
-	# Name is built into PropertyGroup
-	path: bpy.props.StringProperty(name="Path")
-	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
-	offset: bpy.props.FloatProperty(name="Offset", default=0, update=update_driver)
-	loop_start: bpy.props.IntProperty(name="Loop Start Frame", default=0)
-	loop_duration: bpy.props.IntProperty(name="Loop Duration", default=0)
-
-# This will get used for objects later
-def find_rig_data(name: str, category: str):
+def check_supported_fuzzy(name: str, key: str):
 	for item in supported:
-		if item.get(category, None) in name:
+		if item.get(key, None) in name:
 			return item
 
+def check_supported_exact(name: str, key: str):
+	for item in supported:
+		if item.get(key, None) == name:
+			return item
+
+# Yucky code here, at least it works
+def find_first_object(context: bpy.types.Context):
+	for obj in context.selected_objects:
+		if obj.type == "MESH":
+			data = check_supported_fuzzy(obj.name, "mesh")
+			if data:
+				return (obj, data)
+		for child in obj.children_recursive:
+			if child.type != "MESH":
+				continue
+			data = check_supported_fuzzy(child.name, "mesh")
+			if data:
+				return (child, data)
+	return (None, None)
+
 def load_cache(path: str) -> bpy.types.CacheFile:
-	# Load the cache again, never use multiusers
-	# In Blender, each cache directly stores the timing properties
-	# Animation timing must be independent per object, so we need independent caches
 	bpy.ops.cachefile.open(filepath=path)
 	cache = bpy.data.cache_files[-1]
 	# Randomize the name so Blender doesn't reorder it
 	cache.name = str(uuid4())
 	return cache
 
-def set_driver(cache: bpy.types.CacheFile, prop: Animation_Property) -> None:
+def set_driver(cache: bpy.types.CacheFile, path: str, speed: float, offset: float) -> None:
+	(name, loop_start, loop_end) = parse_path(path)
+	loop_duration = loop_end - loop_start
+
 	# Non-animated sequence, don't bother adding drivers
-	if prop.loop_duration == 0:
+	if loop_duration == 0:
 		return
 
 	# Never add the same driver twice
@@ -102,32 +88,31 @@ def set_driver(cache: bpy.types.CacheFile, prop: Animation_Property) -> None:
 
 	# Loop animation using frame driver
 	cache.override_frame = True
-	speed_str = "" if prop.speed == 1 else f" * {prop.speed}"
-	offset_str = "" if prop.offset == 0 else f" + {prop.offset}"
+	speed_str = "" if speed == 1 else f" * {speed}"
+	offset_str = "" if offset == 0 else f" + {offset}"
 	frame_str = f"frame{speed_str}{offset_str}"
-	if prop.loop_start == 0:
+	if loop_start == 0:
 		# Simple looping animation
-		driver.expression = f"({frame_str}) % {prop.loop_duration + 1}"
+		driver.expression = f"({frame_str}) % {loop_duration + 1}"
 	else:
 		# Loop after a specific frame
-		driver.expression = f"min({frame_str}, ({frame_str} - {prop.loop_start}) % {prop.loop_duration + 1} + {prop.loop_start})"
+		driver.expression = f"min({frame_str}, ({frame_str} - {loop_start}) % {loop_duration + 1} + {loop_start})"
 
-def extract_path_data(path: str):
-	"""Extract category, name and frame range data stored in an Alembic path"""
-	# Examples:
-	# "/shirt/bruh/anim_lol_10_63" -> ("shirt", "Anim Lol", 10, 63)
-	# "/shirt/rest" -> ("shirt", "Rest", 0, 0)
-	# "/shirt/flap_12" -> ("shirt", "Flap", 0, 12)
-	# "/shirt/" -> ("shirt", "", 0, 0)
-	# "/shirt" -> ("", "Shirt", 0, 0)
-	# "/" -> ("", "", 0, 0)
-	# "" -> ("", "", 0, 0)
+def parse_path(path: str):
+	"""Parses name and frame range data stored in an Alembic path"""
+	# "/shirt/bruh/anim_lol_10_63" -> ("Anim Lol", 10, 63)
+	# "/shirt/rest" -> ("Rest", 0, 0)
+	# "/shirt/flap_12" -> ("Flap", 0, 12)
+	# "/shirt/" -> ("", 0, 0)
+	# "/shirt" -> ("Shirt", 0, 0)
+	# "/" -> ("", 0, 0)
+	# "" -> ("", 0, 0)
 
 	# This shouldn't happen unless you screw up the export
 	if not path:
 		return ("", "", 0, 0)
 	
-	# Strip first slash, eg. "/tie/flap_63" becomes "tie/flap_63"
+	# Strip first slash, eg. "/flap_63" becomes "flap_63"
 	if path[0] == "/":
 		path = path[1:]
 		
@@ -144,7 +129,7 @@ def extract_path_data(path: str):
 		except:
 			pass
 		anim = anim[:underscore]
-		# Find frame start, eg. /tie/flap_10_63 returns 10
+		# Find frame start, eg. /flap_10_63 returns 10
 		underscore = anim.rfind("_")
 		if (underscore >= 0):
 			try:
@@ -153,46 +138,16 @@ def extract_path_data(path: str):
 				pass
 			anim = anim[:underscore]
 	
-	# Find category, eg. "/tie/flap_63" returns "tie", but "/tie" returns ""
-	category = "" if len(parts) <= 1 else parts[0]
-	
-	# User displayed name, eg. "/tie/fast_flap_10_63" returns "Fast Flap"
+	# User displayed name, eg. "/fast_flap_10_63" returns "Fast Flap"
 	anim = anim.replace("_", " ").title()
-	return (category, anim, start_frame, end_frame)
-
-def update_anims(obj: bpy.types.Object, cache: bpy.types.CacheFile, modifier: bpy.types.MeshSequenceCacheModifier) -> None:
-	props = obj.nc_props
-	if props.caches:
-		return
-	
-	# Populate list and default to rest animation
-	for path in cache.object_paths:
-		data = extract_path_data(path.path)
-		
-		# Only list items within the current category
-		if props.object_name != data[0]:
-			continue
-
-		item = props.caches.add()
-		item.path = path.path
-		item.name = data[1]
-		item.loop_start = data[2]
-		item.loop_duration = data[3] - data[2]
-
-		# Default to rest animation
-		if data[1] == "Rest":
-			props.selected_index = len(props.caches) - 1
-			modifier.object_path = path.path
+	return (anim, start_frame, end_frame)
 
 class Animation_List_Data(bpy.types.PropertyGroup):
 
 	def get_anim_libs(self, context):
-		selected = context.active_object
-		if not selected or selected.type != "ARMATURE":
-			return
-		found_rig = find_rig_data(selected.name.lower(), "armature")
-		if found_rig:
-			return found_rig["libs"]
+		(obj, data) = find_first_object(context)
+		if data:
+			return data["libs"]
 
 	def set_anim_lib(self, context):
 		target = getattr(context, "nc_target", None)
@@ -200,15 +155,8 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 		if not target or not modifier:
 			return
 		
-		# See load_cache for why I'm not using multiusers for this
 		cache = load_cache(self.cache_lib)
 		modifier.cache_file = cache
-
-		# Reset animation list
-		self.caches.clear()
-
-		# Update menu contents, Blender takes a bit to load the file
-		bpy.app.timers.register(functools.partial(update_anims, target, cache, modifier), first_interval=0.01)
 	
 	def set_anim(self, context):
 		target = getattr(context, "nc_target", None)
@@ -217,58 +165,58 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 			return
 		
 		# Update animation cache
-		selected_cache = self.caches[self.selected_index]
-		modifier.object_path = selected_cache.path
+		selected_anim = modifier.cache_file.object_paths[self.selected_index]
+		modifier.object_path = selected_anim.path
 
 		# Update driver settings
-		set_driver(modifier.cache_file, selected_cache)
+		set_driver(modifier.cache_file, selected_anim.path, self.speed, self.offset)
+	
+	def update_driver(self, context):
+		modifier = getattr(context, "nc_modifier", None)
+		if not modifier:
+			return
+		set_driver(modifier.cache_file, modifier.object_path, self.speed, self.offset)
 
-	object_name: bpy.props.StringProperty(name="Object Name")
 	cache_lib: bpy.props.EnumProperty(name="Animation Library", items=get_anim_libs, update=set_anim_lib)
-	caches: bpy.props.CollectionProperty(type=Animation_Property)
 	selected_index: bpy.props.IntProperty(default=0, update=set_anim)
+	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
+	offset: bpy.props.FloatProperty(name="Offset", default=0, update=update_driver)
+
+class Animation_List(bpy.types.UIList):
+	bl_idname = "ALA_UL_Animation_List"
+
+	def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+		row = layout.row()
+		name = parse_path(item.path)[0]
+		row.label(text=name)
 
 class Add_Cache_Modifier(bpy.types.Operator):
 	"""Adds an animated sequence cache to the selected object"""
-	
-	bl_label = "Add Animation Cache Modifier"
+	bl_label = "Add Modifiers"
 	bl_idname = "nc.add_cache"
 	bl_options = {"REGISTER", "UNDO"}
 
 	cache_name = "NC_SEQUENCE_CACHE"
 	weight_name = "NC_VERTEX_WEIGHT"
-
-	rig_name: bpy.props.StringProperty(name="Rig Name")
 	object_name: bpy.props.StringProperty(name="Object Name")
 
 	def execute(self, context):
 		target = getattr(context, "nc_target", None)
-		if not target or not self.rig_name or not self.object_name:
+		if not target or not self.object_name:
 			self.report({"ERROR_INVALID_INPUT"}, "Missing parameters!")
 			return {"CANCELLED"}
-		
-		# Store object name on target for later
-		target.nc_props.object_name = self.object_name
-		
-		rig_match = None
-		for item in supported:
-			if item.get("armature", None) == self.rig_name:
-				rig_match = item
-				break
-		
-		if not rig_match:
-			self.report({"ERROR_INVALID_INPUT"}, f"Unsupported rig {self.rig_name}!")
+
+		data = check_supported_exact(self.object_name, "mesh")
+		if not data:
+			self.report({"ERROR_INVALID_INPUT"}, f"Unsupported object {self.object_name}!")
 			return {"CANCELLED"}
 		
-		libs = rig_match["libs"]
+		libs = data["libs"]
 		if not libs:
 			self.report({"ERROR_INVALID_INPUT"}, f"No animations for {self.object_name}!")
 			return {"CANCELLED"}
 		
-		# Reset object rotation
-		target.rotation_euler = (0, 0, 0)
-
-		# Never add the same modifier twice
+		# Ensure we don't add the same modifier twice
 		cache_modifier: bpy.types.MeshSequenceCacheModifier = None
 		weight_modifier: bpy.types.VertexWeightEditModifier = None
 
@@ -283,14 +231,7 @@ class Add_Cache_Modifier(bpy.types.Operator):
 			cache_modifier = target.modifiers.new(name=self.cache_name, type="MESH_SEQUENCE_CACHE")
 			bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.cache_name, index=0)
 		
-		# See load_cache for why I'm not using multiusers for this
-		chosen_lib = libs[0]
-		cache = load_cache(chosen_lib[0])
-
-		# Assign cache to modifier
-		cache_modifier.cache_file = cache
-		
-		# TEMPORARY HACK HERE
+		# Hardcoded tie for now
 		if self.object_name == "tie":
 			if not weight_modifier:
 				weight_modifier = target.modifiers.new(name=self.weight_name, type="VERTEX_WEIGHT_EDIT")
@@ -301,87 +242,107 @@ class Add_Cache_Modifier(bpy.types.Operator):
 			weight_modifier.default_weight = 1
 			weight_modifier.use_add = True
 			weight_modifier.add_threshold = 0
-		
-		# Update menu contents, Blender takes a bit to load the file
-		bpy.app.timers.register(functools.partial(update_anims, target, cache, cache_modifier), first_interval=0.01)
+
+		# Load the top library by default
+		chosen_lib = libs[0]
+		cache = load_cache(chosen_lib[0])
+
+		# Assign cache to modifier
+		cache_modifier.cache_file = cache
 
 		return {"FINISHED"}
 
-class Animation_List(bpy.types.UIList):
-	bl_idname = "ALA_UL_Animation_List"
-	
-	def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-		row = layout.row()
-		row.context_pointer_set(name="nc_item", data=item)
-		row.label(text=item.name)
-		# Only draw speed and offset for animated items
-		if item.loop_duration > 0:
-			row.prop(item, "speed")
-			row.prop(item, "offset")
+class Add_Overrides(bpy.types.Operator):
+	"""Adds library overrides to the selected object"""
+	bl_label = "Library Override Selected"
+	bl_idname = "nc.add_overrides"
+	bl_options = {"REGISTER", "UNDO"}
 
-class Attachment_Panel(bpy.types.Panel):
-	bl_label = "No Cloth Sims"
-	bl_idname = "ALA_PT_Attachment_Panel"
+	def execute(self, context):
+		bpy.ops.object.make_override_library()
+		return {"FINISHED"}
+
+class Reset_Position(bpy.types.Operator):
+	"""Resets the position of the selected object"""
+	bl_label = "Reset Position"
+	bl_idname = "nc.reset_position"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		bpy.ops.object.location_clear()
+		return {"FINISHED"}
+
+class Reset_Rotation(bpy.types.Operator):
+	"""Resets the rotation of the selected object"""
+	bl_label = "Reset Rotation"
+	bl_idname = "nc.reset_rotation"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		bpy.ops.object.rotation_clear()
+		return {"FINISHED"}
+
+class Brute_Force_Panel(bpy.types.Panel):
+	bl_label = "Brute Force"
+	bl_idname = "ALA_PT_Brute_Force_Panel"
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
 	bl_category = "No Cloth Sims"
 
 	def draw(self, context):
 		layout = self.layout
-		selected = context.active_object
+		layout.operator(Add_Overrides.bl_idname)
+		layout.operator(Reset_Rotation.bl_idname)
 
-		if not selected or selected.type != "ARMATURE":
-			layout.label(text="Please select a rig!")
+class Animation_Panel(bpy.types.Panel):
+	bl_label = "Animation"
+	bl_idname = "ALA_PT_Animation_Panel"
+	bl_space_type = "VIEW_3D"
+	bl_region_type = "UI"
+	bl_category = "No Cloth Sims"
+
+	def draw(self, context):
+		layout = self.layout
+		props = context.scene.nc_props
+
+		(obj, data) = find_first_object(context)
+		if not data:
+			layout.label(text="No supported object selected!")
 			return
 		
-		rig_data = find_rig_data(selected.name.lower(), "armature")
-		if not rig_data:
-			layout.label(text=f"Unsupported Rig: {selected.name}")
-			return
-		
-		# Selected rig label
-		rig_name = rig_data["armature"]
-		layout.label(text=f"Selected Rig: {rig_name.title()}")
+		mesh_name = data["mesh"]
+		layout.label(text=f"Selected: {mesh_name}")
 
-		# Add modifier buttons
-		for obj_name in rig_data["parts"]:
-			for child in selected.children:
-				# Ignore non-matching children
-				if obj_name not in child.name.lower():
-					continue
-				
-				# Check for cache modifier
-				cache_modifier = None
-				for m in child.modifiers:
-					if m.name == Add_Cache_Modifier.cache_name:
-						cache_modifier = m
-						break
-				
-				# Pass stuff around with context pointers
-				col = layout.column()
-				col.context_pointer_set(name="nc_target", data=child)
+		# Pass stuff around with context pointers
+		layout.context_pointer_set(name="nc_target", data=obj)
 
-				if cache_modifier:
-					col.context_pointer_set(name="nc_modifier", data=cache_modifier)
-					col.prop(child.nc_props, "cache_lib", text="")
-					col.template_list(Animation_List.bl_idname, "", child.nc_props, "caches", child.nc_props, "selected_index")
-				else:
-					# Can't pass Python lists, so pass two strings instead
-					params = col.operator(Add_Cache_Modifier.bl_idname, text=f"Animate {obj_name.title()}", icon="ADD")
-					params.rig_name = rig_name
-					params.object_name = obj_name
+		# Check for cache modifier
+		cache_modifier = None
+		for m in obj.modifiers:
+			if m.name == Add_Cache_Modifier.cache_name:
+				cache_modifier = m
 				break
+		
+		if cache_modifier:
+			layout.context_pointer_set(name="nc_modifier", data=cache_modifier)
+			layout.prop(props, "cache_lib", text="")
+			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
+			layout.prop(props, "speed")
+			layout.prop(props, "offset")
+		else:
+			params = layout.operator(Add_Cache_Modifier.bl_idname, icon="ADD")
+			params.object_name = data["mesh"]
 
 # Dump all classes to register in here
-classes = [Attachment_Panel, Add_Cache_Modifier, Animation_Property, Animation_List, Animation_List_Data]
+classes = [Brute_Force_Panel, Animation_Panel, Add_Overrides, Reset_Position, Reset_Rotation, Add_Cache_Modifier, Animation_List, Animation_List_Data]
 
 def register() -> None:
 	for cls in classes:
 		bpy.utils.register_class(cls)
-	bpy.types.Object.nc_props = bpy.props.PointerProperty(type=Animation_List_Data)
+	bpy.types.Scene.nc_props = bpy.props.PointerProperty(type=Animation_List_Data)
 
 def unregister() -> None:
-	del bpy.types.Object.nc_props
+	del bpy.types.Scene.nc_props
 	for cls in classes:
 		bpy.utils.unregister_class(cls)
 
