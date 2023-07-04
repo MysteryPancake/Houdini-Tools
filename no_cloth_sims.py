@@ -315,12 +315,13 @@ class Load_Bake(bpy.types.Operator):
 		# Import file
 		bpy.ops.wm.alembic_import(filepath=file_path, always_add_cache_reader=True, set_frame_range=False)
 		
-		# Move to collection
-		for obj in context.selected_objects:
-			col.objects.link(obj)
-			context.scene.collection.objects.unlink(obj)
+		# Move top level objects to collection
+		for obj in context.scene.collection.objects:
+			if obj.select_get():
+				col.objects.link(obj)
+				context.scene.collection.objects.unlink(obj)
 
-		# Hardcoded tie materials for now
+		# Fuck it
 		if bake_name == "tie":
 			# Link material
 			with bpy.data.libraries.load("A:\\mav\\2023\\sandbox\\studio2\\s223\\blender\\s223\\assets\\character\\chargary01.blend", link=True) as (data_from, data_to):
