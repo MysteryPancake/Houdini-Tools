@@ -1,4 +1,4 @@
-import bpy, functools
+import bpy, functools, os
 from uuid import uuid4
 
 bl_info = {
@@ -98,6 +98,12 @@ def set_driver(cache: bpy.types.CacheFile, path: str, speed: float, offset: floa
 		# Loop after a specific frame
 		driver.expression = f"min({frame_str}, ({frame_str} - {loop_start}) % {loop_duration + 1} + {loop_start})"
 
+def get_shot_name() -> str:
+	blend_file = bpy.path.basename(bpy.data.filepath)
+	blend_name = os.path.splitext(blend_file)[0]
+	last_dash = blend_name.rfind("_")
+	return blend_name[:last_dash]
+
 def parse_path(path: str):
 	"""Parses name and frame range data stored in an Alembic path"""
 	# "/shirt/bruh/anim_lol_10_63" -> ("Anim Lol", 10, 63)
@@ -181,6 +187,7 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 	selected_index: bpy.props.IntProperty(default=0, update=set_anim)
 	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
 	offset: bpy.props.FloatProperty(name="Offset", default=0, update=update_driver)
+	bake_name: bpy.props.StringProperty(name="Bake Name", default="tie")
 
 class Animation_List(bpy.types.UIList):
 	bl_idname = "ALA_UL_Animation_List"
@@ -190,10 +197,10 @@ class Animation_List(bpy.types.UIList):
 		name = parse_path(item.path)[0]
 		row.label(text=name)
 
-class Add_Cache_Modifier(bpy.types.Operator):
+class Add_Modifiers(bpy.types.Operator):
 	"""Adds an animated sequence cache to the selected object"""
 	bl_label = "Add Modifiers"
-	bl_idname = "nc.add_cache"
+	bl_idname = "nc.add_modifiers"
 	bl_options = {"REGISTER", "UNDO"}
 
 	cache_name = "NC_SEQUENCE_CACHE"
@@ -249,6 +256,68 @@ class Add_Cache_Modifier(bpy.types.Operator):
 
 		# Assign cache to modifier
 		cache_modifier.cache_file = cache
+		return {"FINISHED"}
+
+class Bake_Animation(bpy.types.Operator):
+	"""Bakes the animation to the FX folder in world space"""
+	bl_label = "Bake in World Space"
+	bl_idname = "nc.bake_animation"
+	bl_options = {"REGISTER", "UNDO"}
+
+	object_name: bpy.props.StringProperty(name="Object Name")
+
+	def execute(self, context):
+		if not self.object_name:
+			self.report({"ERROR_INVALID_INPUT"}, "Missing object name!")
+			return {"CANCELLED"}
+		
+		shot = get_shot_name()
+		if not shot:
+			self.report({"ERROR_INVALID_INPUT"}, "Missing shot name!")
+			return {"CANCELLED"}
+
+		cache_folder = f"A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\Production\\{shot}\\caches\\abc"
+		cache_file = f"{shot}_{self.object_name}.abc"
+
+		# Ensure folders exist
+		if not os.path.exists(cache_folder):
+			os.umask(0)
+			os.makedirs(cache_folder)
+
+		bpy.ops.wm.alembic_export(filepath=os.path.join(cache_folder, cache_file), check_existing=True, selected_only=True, visible_only=True)
+		return {"FINISHED"}
+
+class Load_Bake(bpy.types.Operator):
+	"""Loads a baked animation from the FX folder"""
+	bl_label = "Load Baked Animation"
+	bl_idname = "nc.load_bake"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		bake_name = context.scene.nc_props.bake_name
+		if not bake_name:
+			self.report({"ERROR_INVALID_INPUT"}, "Please type in a bake name!")
+			return {"CANCELLED"}
+
+		shot = get_shot_name()
+		cache_folder = f"A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\Production\\{shot}\\caches\\abc"
+		cache_file = f"{shot}_{bake_name}.abc"
+
+		file_path = os.path.join(cache_folder, cache_file)
+		if not os.path.exists(file_path):
+			self.report({"ERROR_INVALID_INPUT"}, f"No sim named {cache_file} found!")
+			return {"CANCELLED"}
+
+		bpy.ops.wm.alembic_import(filepath=file_path, always_add_cache_reader=True, set_frame_range=False)
+
+		# Hardcoded tie materials for now
+		if bake_name == "tie":
+			# Link material
+			with bpy.data.libraries.load("A:\\mav\\2023\\sandbox\\studio2\\s223\\blender\\s223\\assets\\character\\chargary01.blend", link=True) as (data_from, data_to):
+				data_to.materials = ["gary_tie"]
+			# Assign material
+			for obj in context.selected_objects:
+				obj.data.materials.append(data_to.materials[0])
 
 		return {"FINISHED"}
 
@@ -282,6 +351,19 @@ class Reset_Rotation(bpy.types.Operator):
 		bpy.ops.object.rotation_clear()
 		return {"FINISHED"}
 
+class Assembly_Panel(bpy.types.Panel):
+	bl_label = "Assembly"
+	bl_idname = "ALA_PT_Assembly_Panel"
+	bl_space_type = "VIEW_3D"
+	bl_region_type = "UI"
+	bl_category = "No Cloth Sims"
+
+	def draw(self, context):
+		layout = self.layout
+		props = context.scene.nc_props
+		layout.prop(props, "bake_name")
+		layout.operator(Load_Bake.bl_idname)
+
 class Brute_Force_Panel(bpy.types.Panel):
 	bl_label = "Brute Force"
 	bl_idname = "ALA_PT_Brute_Force_Panel"
@@ -307,7 +389,7 @@ class Animation_Panel(bpy.types.Panel):
 		props = context.scene.nc_props
 
 		(obj, data) = find_first_object(context)
-		if not data:
+		if not obj:
 			layout.label(text="No supported object selected!")
 			return
 		
@@ -320,22 +402,26 @@ class Animation_Panel(bpy.types.Panel):
 		# Check for cache modifier
 		cache_modifier = None
 		for m in obj.modifiers:
-			if m.name == Add_Cache_Modifier.cache_name:
+			if m.name == Add_Modifiers.cache_name:
 				cache_modifier = m
 				break
 		
 		if cache_modifier:
 			layout.context_pointer_set(name="nc_modifier", data=cache_modifier)
 			layout.prop(props, "cache_lib", text="")
-			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
 			layout.prop(props, "speed")
 			layout.prop(props, "offset")
+			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
+			layout.operator(Bake_Animation.bl_idname).object_name = data["mesh"]
 		else:
-			params = layout.operator(Add_Cache_Modifier.bl_idname, icon="ADD")
-			params.object_name = data["mesh"]
+			layout.operator(Add_Modifiers.bl_idname, icon="ADD").object_name = data["mesh"]
 
 # Dump all classes to register in here
-classes = [Brute_Force_Panel, Animation_Panel, Add_Overrides, Reset_Position, Reset_Rotation, Add_Cache_Modifier, Animation_List, Animation_List_Data]
+classes = [
+	Brute_Force_Panel, Animation_Panel, Assembly_Panel,
+	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake,
+	Animation_List, Animation_List_Data
+]
 
 def register() -> None:
 	for cls in classes:
