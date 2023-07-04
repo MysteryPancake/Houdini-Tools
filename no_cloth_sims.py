@@ -267,7 +267,8 @@ class Bake_Animation(bpy.types.Operator):
 	object_name: bpy.props.StringProperty(name="Object Name")
 
 	def execute(self, context):
-		if not self.object_name:
+		target = getattr(context, "nc_target", None)
+		if not target or not self.object_name:
 			self.report({"ERROR_INVALID_INPUT"}, "Missing object name!")
 			return {"CANCELLED"}
 		
@@ -284,7 +285,16 @@ class Bake_Animation(bpy.types.Operator):
 			os.umask(0)
 			os.makedirs(cache_folder)
 
-		bpy.ops.wm.alembic_export(filepath=os.path.join(cache_folder, cache_file), check_existing=True, selected_only=True, visible_only=True)
+			# Add bonus folders too, why not
+			os.makedirs( f"A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\Production\\{shot}\\blender")
+			os.makedirs( f"A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\Production\\{shot}\\houdini")
+			os.makedirs( f"A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\Production\\{shot}\\movies")
+
+		# Make sure only the target is selected for export
+		bpy.ops.object.select_all(action="DESELECT")
+		target.select_set(True)
+		bpy.ops.wm.alembic_export(filepath=os.path.join(cache_folder, cache_file), check_existing=True, selected=True)
+
 		return {"FINISHED"}
 
 class Load_Bake(bpy.types.Operator):
@@ -308,18 +318,23 @@ class Load_Bake(bpy.types.Operator):
 			self.report({"ERROR_INVALID_INPUT"}, f"No sim named {cache_file} found!")
 			return {"CANCELLED"}
 		
+		# Check for Shino required collection
+		shino_col = None
+		for col in context.scene.collection.children:
+			if col.name == f"{shot}_fx":
+				shino_col = col
+				break
+		
+		if not shino_col:
+			shino_col = bpy.data.collections.new(name=f"{shot}_fx")
+			context.scene.collection.children.link(shino_col)
+
 		# Add FX collection for Shino publish
-		col = bpy.data.collections.new(name=f"-->{shot}_{bake_name}_fx")
-		context.scene.collection.children.link(col)
+		tie_col = bpy.data.collections.new(name=f"--> {shot}_{bake_name}_fx")
+		shino_col.children.link(tie_col)
 
 		# Import file
 		bpy.ops.wm.alembic_import(filepath=file_path, always_add_cache_reader=True, set_frame_range=False)
-		
-		# Move top level objects to collection
-		for obj in context.scene.collection.objects:
-			if obj.select_get():
-				col.objects.link(obj)
-				context.scene.collection.objects.unlink(obj)
 
 		# Fuck it
 		if bake_name == "tie":
@@ -341,6 +356,26 @@ class Add_Overrides(bpy.types.Operator):
 
 	def execute(self, context):
 		bpy.ops.object.make_override_library()
+		return {"FINISHED"}
+
+class Toggle_Vertex_Weights(bpy.types.Operator):
+	"""Toggle between vertex weights and bone envelopes"""
+	bl_label = "Toggle Vertex Weights"
+	bl_idname = "nc.toggle_weights"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		target = getattr(context, "nc_target", None)
+		if not target:
+			self.report({"ERROR_INVALID_INPUT"}, "Missing target!")
+			return {"CANCELLED"}
+			
+		for m in target.modifiers:
+			if m.type != "ARMATURE":
+				continue
+			m.use_bone_envelopes = m.use_vertex_groups
+			m.use_vertex_groups = not m.use_vertex_groups
+
 		return {"FINISHED"}
 
 class Reset_Position(bpy.types.Operator):
@@ -420,18 +455,19 @@ class Animation_Panel(bpy.types.Panel):
 		
 		if cache_modifier:
 			layout.context_pointer_set(name="nc_modifier", data=cache_modifier)
+			layout.operator(Toggle_Vertex_Weights.bl_idname)
 			layout.prop(props, "cache_lib", text="")
 			layout.prop(props, "speed")
 			layout.prop(props, "offset")
 			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
-			layout.operator(Bake_Animation.bl_idname).object_name = data["mesh"]
+			layout.operator(Bake_Animation.bl_idname).object_name = mesh_name
 		else:
-			layout.operator(Add_Modifiers.bl_idname, icon="ADD").object_name = data["mesh"]
+			layout.operator(Add_Modifiers.bl_idname, text=f"Animate {mesh_name.title()}", icon="ADD").object_name = mesh_name
 
 # Dump all classes to register in here
 classes = [
 	Brute_Force_Panel, Animation_Panel, Assembly_Panel,
-	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake, Bake_Animation,
+	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake, Bake_Animation, Toggle_Vertex_Weights,
 	Animation_List, Animation_List_Data
 ]
 
