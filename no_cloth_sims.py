@@ -307,8 +307,18 @@ class Load_Bake(bpy.types.Operator):
 		if not os.path.exists(file_path):
 			self.report({"ERROR_INVALID_INPUT"}, f"No sim named {cache_file} found!")
 			return {"CANCELLED"}
+		
+		# Add FX collection for Shino publish
+		col = bpy.data.collections.new(name=f"->{shot}_{bake_name}_fx")
+		context.scene.collection.children.link(col)
 
+		# Import file
 		bpy.ops.wm.alembic_import(filepath=file_path, always_add_cache_reader=True, set_frame_range=False)
+		
+		# Move to collection
+		for obj in context.selected_objects:
+			col.objects.link(obj)
+			context.scene.collection.objects.unlink(obj)
 
 		# Hardcoded tie materials for now
 		if bake_name == "tie":
@@ -419,7 +429,7 @@ class Animation_Panel(bpy.types.Panel):
 # Dump all classes to register in here
 classes = [
 	Brute_Force_Panel, Animation_Panel, Assembly_Panel,
-	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake,
+	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake, Bake_Animation,
 	Animation_List, Animation_List_Data
 ]
 
