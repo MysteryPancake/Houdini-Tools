@@ -309,7 +309,7 @@ class Load_Bake(bpy.types.Operator):
 			return {"CANCELLED"}
 		
 		# Add FX collection for Shino publish
-		col = bpy.data.collections.new(name=f"->{shot}_{bake_name}_fx")
+		col = bpy.data.collections.new(name=f"-->{shot}_{bake_name}_fx")
 		context.scene.collection.children.link(col)
 
 		# Import file
