@@ -327,7 +327,8 @@ class Load_Bake(bpy.types.Operator):
 				data_to.materials = ["gary_tie"]
 			# Assign material
 			for obj in context.selected_objects:
-				obj.data.materials.append(data_to.materials[0])
+				if obj.type == "MESH":
+					obj.data.materials.append(data_to.materials[0])
 
 		return {"FINISHED"}
 
