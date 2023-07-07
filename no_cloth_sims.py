@@ -1,15 +1,15 @@
-import bpy, functools, os
+import bpy, os
 from uuid import uuid4
 
 bl_info = {
-	"name": "ALA No Cloth Sims",
+	"name": "No Cloth Sims",
 	"description": "Avoid cloth sims for the small price of everything clipping",
 	"author": "MysteryPancake",
 	"version": (1, 0),
 	"blender": (3, 5, 0),
-	"location": "View 3D > Tool Shelf > No Cloth Sims",
+	"location": "View 3D > Tool Shelf > COFFEE BREAK",
 	"support": "COMMUNITY",
-	"category": "Rigging",
+	"category": "ALA",
 }
 
 # ===========================================================================================================
@@ -33,10 +33,15 @@ supported = [
 		"mesh": "tie",
 		"armature": "gary", # Optional, unused for now
 		"libs": [
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties.abc", "Gary's Ties: Volume 1", "", "ASSET_MANAGER", 0)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties_v2.abc", "Don't mess with the UVs v1", "", "ASSET_MANAGER", 0),
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_dimension_ties.abc", "Dimension Ties", "", "MONKEY", 1),
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_dimension_ties_v2.abc", "John Pork Signature Collection", "", "MONKEY", 2)
 		],
 	}
 ]
+
+cache_modifier_name = "NC_SEQUENCE_CACHE"
+weight_modifier_name = "NC_VERTEX_WEIGHT"
 
 def check_supported_fuzzy(name: str, key: str):
 	for item in supported:
@@ -116,7 +121,7 @@ def parse_path(path: str):
 
 	# This shouldn't happen unless you screw up the export
 	if not path:
-		return ("", "", 0, 0)
+		return ("", 0, 0)
 	
 	# Strip first slash, eg. "/flap_63" becomes "flap_63"
 	if path[0] == "/":
@@ -145,7 +150,7 @@ def parse_path(path: str):
 			anim = anim[:underscore]
 	
 	# User displayed name, eg. "/fast_flap_10_63" returns "Fast Flap"
-	anim = anim.replace("_", " ").title()
+	anim = anim.replace("_", " ").strip().title()
 	return (anim, start_frame, end_frame)
 
 class Animation_List_Data(bpy.types.PropertyGroup):
@@ -188,6 +193,7 @@ class Animation_List_Data(bpy.types.PropertyGroup):
 	speed: bpy.props.FloatProperty(name="Speed", default=1, update=update_driver)
 	offset: bpy.props.FloatProperty(name="Offset", default=0, update=update_driver)
 	bake_name: bpy.props.StringProperty(name="Bake Name", default="tie")
+	weight_name: bpy.props.StringProperty(name="Weight Name", default="DEF-spine.003")
 
 class Animation_List(bpy.types.UIList):
 	bl_idname = "ALA_UL_Animation_List"
@@ -203,8 +209,6 @@ class Add_Modifiers(bpy.types.Operator):
 	bl_idname = "nc.add_modifiers"
 	bl_options = {"REGISTER", "UNDO"}
 
-	cache_name = "NC_SEQUENCE_CACHE"
-	weight_name = "NC_VERTEX_WEIGHT"
 	object_name: bpy.props.StringProperty(name="Object Name")
 
 	def execute(self, context):
@@ -224,25 +228,20 @@ class Add_Modifiers(bpy.types.Operator):
 			return {"CANCELLED"}
 		
 		# Ensure we don't add the same modifier twice
-		cache_modifier: bpy.types.MeshSequenceCacheModifier = None
-		weight_modifier: bpy.types.VertexWeightEditModifier = None
+		cache_modifier: bpy.types.MeshSequenceCacheModifier = target.modifiers.get(cache_modifier_name)
+		weight_modifier: bpy.types.VertexWeightEditModifier = target.modifiers.get(weight_modifier_name)
 
-		for m in target.modifiers:
-			match m.name:
-				case self.cache_name:
-					cache_modifier = m
-				case self.weight_name:
-					weight_modifier = m
-		
 		if not cache_modifier:
-			cache_modifier = target.modifiers.new(name=self.cache_name, type="MESH_SEQUENCE_CACHE")
-			bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.cache_name, index=0)
+			cache_modifier = target.modifiers.new(name=cache_modifier_name, type="MESH_SEQUENCE_CACHE")
+			cache_modifier.use_vertex_interpolation = True
+			cache_modifier.read_data = {"VERT", "UV"}
+			bpy.ops.object.modifier_move_to_index({"object": target}, modifier=cache_modifier_name, index=0)
 		
 		# Hardcoded tie for now
 		if self.object_name == "tie":
 			if not weight_modifier:
-				weight_modifier = target.modifiers.new(name=self.weight_name, type="VERTEX_WEIGHT_EDIT")
-				bpy.ops.object.modifier_move_to_index({"object": target}, modifier=self.weight_name, index=1)
+				weight_modifier = target.modifiers.new(name=weight_modifier_name, type="VERTEX_WEIGHT_EDIT")
+				bpy.ops.object.modifier_move_to_index({"object": target}, modifier=weight_modifier_name, index=1)
 
 			# Add vertex weights for rigging, assume tie for now
 			weight_modifier.vertex_group = "DEF-spine.003"
@@ -256,6 +255,29 @@ class Add_Modifiers(bpy.types.Operator):
 
 		# Assign cache to modifier
 		cache_modifier.cache_file = cache
+
+		return {"FINISHED"}
+
+class Remove_Modifiers(bpy.types.Operator):
+	"""Removes added animated sequence caches from the selected object"""
+	bl_label = "Remove Modifiers"
+	bl_idname = "nc.remove_modifiers"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		target = getattr(context, "nc_target", None)
+		if not target:
+			self.report({"ERROR_INVALID_INPUT"}, "Missing parameters!")
+			return {"CANCELLED"}
+		
+		cache_modifier: bpy.types.MeshSequenceCacheModifier = target.modifiers.get(cache_modifier_name)
+		if cache_modifier:
+			target.modifiers.remove(cache_modifier)
+
+		weight_modifier: bpy.types.VertexWeightEditModifier = target.modifiers.get(weight_modifier_name)
+		if weight_modifier:
+			target.modifiers.remove(weight_modifier)
+		
 		return {"FINISHED"}
 
 class Bake_Animation(bpy.types.Operator):
@@ -293,7 +315,7 @@ class Bake_Animation(bpy.types.Operator):
 		# Make sure only the target is selected for export
 		bpy.ops.object.select_all(action="DESELECT")
 		target.select_set(True)
-		bpy.ops.wm.alembic_export(filepath=os.path.join(cache_folder, cache_file), check_existing=True, selected=True)
+		bpy.ops.wm.alembic_export(filepath=os.path.join(cache_folder, cache_file), selected=True)
 
 		return {"FINISHED"}
 
@@ -319,24 +341,19 @@ class Load_Bake(bpy.types.Operator):
 			return {"CANCELLED"}
 		
 		# Check for Shino required collection
-		shino_col = None
-		for col in context.scene.collection.children:
-			if col.name == f"{shot}_fx":
-				shino_col = col
-				break
-		
+		shino_col = context.scene.collection.children.get(f"{shot}_fx")
 		if not shino_col:
 			shino_col = bpy.data.collections.new(name=f"{shot}_fx")
 			context.scene.collection.children.link(shino_col)
 
-		# Add FX collection for Shino publish
-		tie_col = bpy.data.collections.new(name=f"--> {shot}_{bake_name}_fx")
-		shino_col.children.link(tie_col)
+			# Add FX collection for Shino publish
+			tie_col = bpy.data.collections.new(name=f"--> {shot}_{bake_name}_fx")
+			shino_col.children.link(tie_col)
 
 		# Import file
 		bpy.ops.wm.alembic_import(filepath=file_path, always_add_cache_reader=True, set_frame_range=False)
 
-		# Fuck it
+		# Force the tie to work
 		if bake_name == "tie":
 			# Link material
 			with bpy.data.libraries.load("A:\\mav\\2023\\sandbox\\studio2\\s223\\blender\\s223\\assets\\character\\chargary01.blend", link=True) as (data_from, data_to):
@@ -345,6 +362,8 @@ class Load_Bake(bpy.types.Operator):
 			for obj in context.selected_objects:
 				if obj.type == "MESH":
 					obj.data.materials.append(data_to.materials[0])
+					# Add missing subsurface modifier
+					obj.modifiers.new(name="NC_SUBSURFACE", type="SUBSURF")
 
 		return {"FINISHED"}
 
@@ -398,38 +417,58 @@ class Reset_Rotation(bpy.types.Operator):
 		bpy.ops.object.rotation_clear()
 		return {"FINISHED"}
 
+class Override_Weights(bpy.types.Operator):
+	"""Replaces the vertex weights of the selected object"""
+	bl_label = "Replace Vertex Weights"
+	bl_idname = "nc.override_weights"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		props = context.scene.nc_props
+		target = getattr(context, "nc_target", None)
+
+		if not target:
+			self.report({"ERROR_INVALID_INPUT"}, "Missing target!")
+			return {"CANCELLED"}
+
+		target.vertex_groups.clear()
+		spine_group = target.vertex_groups.new(name=props.weight_name)
+		spine_group.add([v.index for v in target.data.vertices], 1, "REPLACE")
+
+		return {"FINISHED"}
+
 class Assembly_Panel(bpy.types.Panel):
 	bl_label = "Assembly"
 	bl_idname = "ALA_PT_Assembly_Panel"
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
-	bl_category = "No Cloth Sims"
+	bl_category = "COFFEE BREAK"
 
 	def draw(self, context):
 		layout = self.layout
 		props = context.scene.nc_props
 		layout.prop(props, "bake_name")
-		layout.operator(Load_Bake.bl_idname)
+		layout.operator(Load_Bake.bl_idname, icon="IMPORT")
 
 class Brute_Force_Panel(bpy.types.Panel):
 	bl_label = "Brute Force"
 	bl_idname = "ALA_PT_Brute_Force_Panel"
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
-	bl_category = "No Cloth Sims"
+	bl_category = "COFFEE BREAK"
 
 	def draw(self, context):
 		layout = self.layout
-		layout.operator(Add_Overrides.bl_idname)
-		layout.operator(Reset_Position.bl_idname)
-		layout.operator(Reset_Rotation.bl_idname)
+		layout.operator(Add_Overrides.bl_idname, icon="UNLINKED")
+		layout.operator(Reset_Position.bl_idname, icon="OBJECT_ORIGIN")
+		layout.operator(Reset_Rotation.bl_idname, icon="DRIVER_ROTATIONAL_DIFFERENCE")
 
 class Animation_Panel(bpy.types.Panel):
 	bl_label = "Animation"
 	bl_idname = "ALA_PT_Animation_Panel"
 	bl_space_type = "VIEW_3D"
 	bl_region_type = "UI"
-	bl_category = "No Cloth Sims"
+	bl_category = "COFFEE BREAK"
 
 	def draw(self, context):
 		layout = self.layout
@@ -447,27 +486,31 @@ class Animation_Panel(bpy.types.Panel):
 		layout.context_pointer_set(name="nc_target", data=obj)
 
 		# Check for cache modifier
-		cache_modifier = None
-		for m in obj.modifiers:
-			if m.name == Add_Modifiers.cache_name:
-				cache_modifier = m
-				break
-		
+		cache_modifier = obj.modifiers.get(cache_modifier_name)
 		if cache_modifier:
 			layout.context_pointer_set(name="nc_modifier", data=cache_modifier)
-			layout.operator(Toggle_Vertex_Weights.bl_idname)
-			layout.prop(props, "cache_lib", text="")
+			
+			row = layout.row()
+			split = row.split(factor=0.9, align=True)
+			split.prop(props, "cache_lib", text="")
+			split.operator(Remove_Modifiers.bl_idname, text="", icon="X")
+
+			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
 			layout.prop(props, "speed")
 			layout.prop(props, "offset")
-			layout.template_list(Animation_List.bl_idname, "", cache_modifier.cache_file, "object_paths", props, "selected_index")
-			layout.operator(Bake_Animation.bl_idname).object_name = mesh_name
+		
+			layout.operator(Toggle_Vertex_Weights.bl_idname, text="Swap Parenting Mode", icon="MOD_SIMPLEDEFORM")
+			layout.operator(Override_Weights.bl_idname, icon="MESH_DATA")
+			layout.prop(props, "weight_name")
+
+			layout.operator(Bake_Animation.bl_idname, icon="FILE_TICK").object_name = mesh_name
 		else:
 			layout.operator(Add_Modifiers.bl_idname, text=f"Animate {mesh_name.title()}", icon="ADD").object_name = mesh_name
 
 # Dump all classes to register in here
 classes = [
 	Brute_Force_Panel, Animation_Panel, Assembly_Panel,
-	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Load_Bake, Bake_Animation, Toggle_Vertex_Weights,
+	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Remove_Modifiers, Load_Bake, Bake_Animation, Toggle_Vertex_Weights, Override_Weights,
 	Animation_List, Animation_List_Data
 ]
 
