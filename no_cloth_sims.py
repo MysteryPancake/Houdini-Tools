@@ -397,6 +397,21 @@ class Toggle_Vertex_Weights(bpy.types.Operator):
 
 		return {"FINISHED"}
 
+class Disable_Subdiv(bpy.types.Operator):
+	"Disables subdivision for selected objects"
+	bl_label = "Disable Subdivision"
+	bl_idname = "nc.disable_subdiv"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		for obj in context.selected_objects:
+			for m in obj.modifiers:
+				if m.type == "SUBSURF":
+					m.show_render = False
+					m.show_viewport = False
+					# obj.modifiers.remove(m)
+		return {"FINISHED"}
+
 class Reset_Position(bpy.types.Operator):
 	"""Resets the position of the selected object"""
 	bl_label = "Reset Position"
@@ -462,6 +477,7 @@ class Brute_Force_Panel(bpy.types.Panel):
 		layout.operator(Add_Overrides.bl_idname, icon="UNLINKED")
 		layout.operator(Reset_Position.bl_idname, icon="OBJECT_ORIGIN")
 		layout.operator(Reset_Rotation.bl_idname, icon="DRIVER_ROTATIONAL_DIFFERENCE")
+		layout.operator(Disable_Subdiv.bl_idname, icon="MOD_SUBSURF")
 
 class Animation_Panel(bpy.types.Panel):
 	bl_label = "Animation"
@@ -510,7 +526,7 @@ class Animation_Panel(bpy.types.Panel):
 # Dump all classes to register in here
 classes = [
 	Brute_Force_Panel, Animation_Panel, Assembly_Panel,
-	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Remove_Modifiers, Load_Bake, Bake_Animation, Toggle_Vertex_Weights, Override_Weights,
+	Add_Overrides, Reset_Position, Reset_Rotation, Add_Modifiers, Remove_Modifiers, Load_Bake, Bake_Animation, Toggle_Vertex_Weights, Override_Weights, Disable_Subdiv,
 	Animation_List, Animation_List_Data
 ]
 
