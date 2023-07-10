@@ -6,10 +6,6 @@ class Disable_Subdiv(bpy.types.Operator):
 	bl_idname = "nc.disable_subdiv"
 	bl_options = {"REGISTER", "UNDO"}
 
-	@classmethod
-	def poll(cls, context):
-		return context.active_object is not None
-
 	def execute(self, context):
 		for obj in context.selected_objects:
 			for m in obj.modifiers:
