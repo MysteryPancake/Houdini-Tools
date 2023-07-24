@@ -35,7 +35,8 @@ supported = [
 		"libs": [
 			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_test_ties_v2.abc", "Don't mess with the UVs v1", "", "ASSET_MANAGER", 0),
 			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_dimension_ties.abc", "Dimension Ties", "", "MONKEY", 1),
-			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_dimension_ties_v2.abc", "John Pork Signature Collection", "", "MONKEY", 2)
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\gary_dimension_ties_v2.abc", "John Pork Signature Collection", "", "MONKEY", 2),
+			("A:\\mav\\2023\\sandbox\\studio2\\s223\\departments\\fx\\cloth_library\\rest_tie.abc", "Rest Tie", "", "MONKEY", 3)
 		],
 	}
 ]
