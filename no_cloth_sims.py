@@ -1,5 +1,4 @@
 import bpy, os
-from uuid import uuid4
 
 bl_info = {
 	"name": "No Cloth Sims",
@@ -71,10 +70,10 @@ def find_first_object(context: bpy.types.Context):
 
 def load_cache(path: str) -> bpy.types.CacheFile:
 	bpy.ops.cachefile.open(filepath=path)
-	cache = bpy.data.cache_files[-1]
-	# Randomize the name so Blender doesn't reorder it
-	cache.name = str(uuid4())
-	return cache
+	# Cache order is random, so we need to find the match manually
+	for cache in bpy.data.cache_files:
+		if os.path.samefile(cache.filepath, path):
+			return cache
 
 def set_driver(cache: bpy.types.CacheFile, path: str, speed: float, offset: float) -> None:
 	(name, loop_start, loop_end) = parse_path(path)
