@@ -35,17 +35,15 @@ Unfortunately it can't import prim, vertex or point attributes. Geometry-level a
 
 ## [No Cloth Sims](no_cloth_sims.py)
 
-A Blender addon I used extensively for the cloth FX in the short film [Coffee Brake](https://youtu.be/T57aCLYdX9M), named after the fact we weren't supposed to have cloth sims in the film.
+A Blender addon used extensively for the cloth FX in the short film [Coffee Brake](https://youtu.be/T57aCLYdX9M), named after the fact we weren't supposed to have cloth sims in the film.
 
-![No Cloth Sims](images/no_cloth_sims.PNG)
+|No Cloth Sims|No Cloth Sims Lite|
+|---|---|
+|![No Cloth Sims](images/no_cloth_sims.PNG)|![No Cloth Sims Lite](images/no_cloth_sims_lite.PNG)|
 
 It contains a bunch of utilities to speed up assembly for cloth FX. Its main purpose is adding a Mesh Sequence Cache to the tie, stripping the vertex weights and rebaking the Alembic in world space. This saved over 50 shots of manual work in the final film.
 
-## [No Cloth Sims Lite](no_cloth_sims_lite.py)
-
-A reduced version of No Cloth Sims I made for other departments to use. It was used for most shots in the [dimension sequence](https://youtu.be/T57aCLYdX9M?si=XX9xdrUEsF8jwQMv&t=102), where each artist made a unique scene based on a template animation. This saved another 15 shots of manual work.
-
-![No Cloth Sims Lite](images/no_cloth_sims_lite.PNG)
+I made a reduced version for other departments to use named [No Cloth Sims Lite](no_cloth_sims_lite.py). It was used for most shots in the [dimension sequence](https://youtu.be/T57aCLYdX9M?si=XX9xdrUEsF8jwQMv&t=102), where each artist made a unique scene based on a template animation. This saved another 15 shots of manual work.
 
 ## [Disable Subdivision](disable_subdiv.py)
 
