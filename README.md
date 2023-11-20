@@ -25,7 +25,7 @@ I wrote a [Python script](blender_json_export.py) to export detail, prim, point 
 
 ![Blender JSON Exporter](images/blender_json_export.png)
 
-Next I wrote an importer which takes the geometry and JSON file, then transfers the attributes using Blender's Python API. It works for all types of animated detail attributes, which are imported as custom data:
+Next I wrote an importer which takes the geometry and JSON file, then transfers the attributes using Blender's Python API. It works for all types of animated detail attributes, which are imported as custom data.
 
 |Houdini|Blender|
 |---|---|
