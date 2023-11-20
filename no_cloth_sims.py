@@ -20,11 +20,11 @@ bl_info = {
 # Only the vertices are replaced, so materials stay but UVs are replaced.
 
 # Vertex groups are used to bind rigs to geometry in Blender.
-# This fucks up since vertex groups can't be saved in Alembic or USD files, so Sequence Caches ruin the rig.
+# This screws up since vertex groups can't be saved in Alembic or USD files, so Sequence Caches ruin the rig.
 # TO fix this, you need to add the vertex groups again after the "Mesh Sequence Cache" modifier.
 # This can be done with "Vertex Weight Edit", "Data Transfer" or Geometry Nodes.
 
-# UPDATE: Vertex groups actually export to Alembic files now??? HOW???
+# UPDATE: Vertex groups actually export to Alembic files now!
 # =============================================================================================================
 
 supported = [
