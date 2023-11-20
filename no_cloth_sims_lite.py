@@ -3,7 +3,7 @@ import bpy, random
 bl_info = {
 	"name": "No Cloth Sims Lite",
 	"description": "If this screws up please tell me! Only use this for the dimension shot",
-	"author": "Hallam Roberts",
+	"author": "MysteryPancake",
 	"version": (1, 0),
 	"blender": (3, 5, 0),
 	"location": "View 3D > Tool Shelf > COFFEE BREAK",
