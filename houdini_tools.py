@@ -5,7 +5,7 @@ from bpy_extras.io_utils import ImportHelper
 bl_info = {
 	"name": "Houdini Tools",
 	"description": "Tools for data transfer between Blender and Houdini",
-	"author": "MysteryPancake",
+	"author": "Hallam Roberts",
 	"version": (1, 0),
 	"blender": (3, 4, 1),
 	"location": "File > Import-Export",
