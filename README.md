@@ -3,7 +3,7 @@ Scripts and tools I made at UTS Animal Logic Academy, mostly for data transfer b
 
 ## [Houdini Tools](houdini_tools.py)
 
-Tools designed to import data from Houdini into Blender.
+Importing options designed to transfer data from Houdini to Blender.
 
 ![Houdini Tools](images/houdini_tools.PNG)
 
@@ -11,13 +11,27 @@ Tools designed to import data from Houdini into Blender.
 
 Blender's USD importer doesn't import instances correctly. It has two options: import realized geometry or import the points only.
 
-Instances on Points fixes this, correctly importing instances as Blender should. It takes a point cloud and geometry to instance, imports the points as USD, then instances the geometry on each point using built-in collection instancing.
+Instances on Points fixes this, correctly importing instances as Blender should. It takes a point cloud and geometry to instance, imports the points as USD, then re-instances the geometry on each point.
 
-Blender's USD importer used to do this, but they removed it for some reason. Please add it back.
+Blender's USD importer used to do this, but they removed it for some reason. Please add it back!
 
 ### Geometry and Attributes
 
-Blender's Alembic importer is extremely limited. It ignores most geometry attributes and only imports vertex colors properly.
+Blender's Alembic importer is extremely limited. It ignores most attributes and only imports vertex colors correctly. This means you need to force all attributes to be colours, which is [extremely hacky](https://www.youtube.com/watch?v=1h15stU-TaE).
+
+I wanted to find a better solution. My first idea was manually exporting attributes from Houdini in an intermediate format, then manually reattaching them using Blender's Python API. This is exactly what I did.
+
+I wrote a [Python script](blender_json_export.py) to export detail, prim, point and vertex attributes from Houdini per frame into a JSON file. I packaged this script into the [Blender JSON Export HDA](blender_json_export.hdanc).
+
+![Blender JSON Exporter](images/blender_json_export.png)
+
+Next I wrote an importer which takes the geometry and JSON file, then transfers the attributes using Blender's Python API. It works for all types of animated detail attributes, which are imported as custom data:
+
+|Houdini|Blender|
+|---|---|
+|![JSON Source](images/json_export_src.png)|![JSON Destination](images/json_export_dest.png)|
+
+Unfortunately it can't import prim, vertex or point attributes. Geometry-level attributes can't be set using Blender's Python API, so I can't transfer them properly. This is a shame as it was the main goal of the project.
 
 ## [No Cloth Sims](no_cloth_sims.py)
 
