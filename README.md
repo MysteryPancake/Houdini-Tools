@@ -3,9 +3,9 @@ Scripts and tools I made at UTS Animal Logic Academy, mostly for data transfer b
 
 ## [No Cloth Sims](no_cloth_sims.py)
 
-![No Cloth Sims](images/no_cloth_sims.png)
-
 A Blender addon used extensively for the tie FX in the short film [Coffee Brake](https://youtu.be/T57aCLYdX9M).
+
+![No Cloth Sims](images/no_cloth_sims.PNG)
 
 It contains lots of fun utilities to speed up assembly for cloth FX. Its main purpose is adding a Mesh Sequence Cache to the tie, stripping the vertex weights and rebaking the Alembic. This saved over 50 shots of manual work in the final film.
 
