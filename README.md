@@ -1,7 +1,7 @@
 # Houdini Tools
 Scripts and tools I made at UTS Animal Logic Academy, mostly for data transfer between Blender and Houdini.
 
-# [No Cloth Sims](no_cloth_sims.py)
+## [No Cloth Sims](no_cloth_sims.py)
 
 A Blender addon used extensively for the tie FX in the short film [Coffee Brake](https://youtu.be/T57aCLYdX9M).
 
